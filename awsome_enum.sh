@@ -134,19 +134,29 @@ display_section_header() {
     echo -e "${divider}"
 }
 
-# Function to fetch policy details
+# Function to fetch policy details - modified to handle both managed and inline policies
 fetch_policy_details() {
     local policy_arn="$1"
+    local is_inline="$2"
+    local username="$3"
+    local policy_name="$4"
 
-    policy_version=$(aws iam get-policy --policy-arn "$policy_arn" --query "Policy.DefaultVersionId" --output text $AWS_PROFILE_OPT 2>/dev/null)
-    if [[ -z "$policy_version" ]]; then
-        echo "  [!] Failed to retrieve policy version for $policy_arn"
-        return
+    if [[ "$is_inline" == "true" ]]; then
+        # Handle inline policy
+        statement_yaml=$(aws iam get-user-policy --user-name "$username" --policy-name "$policy_name" --query "PolicyDocument" --output yaml $AWS_PROFILE_OPT 2>/dev/null)
+        print_cyan "\n[*] Inline Policy Details: $policy_name\n"
+    else
+        # Handle managed policy
+        policy_version=$(aws iam get-policy --policy-arn "$policy_arn" --query "Policy.DefaultVersionId" --output text $AWS_PROFILE_OPT 2>/dev/null)
+        if [[ -z "$policy_version" ]]; then
+            echo "  [!] Failed to retrieve policy version for $policy_arn"
+            return
+        fi  # Fixed: Added missing closing brace
+
+        statement_yaml=$(aws iam get-policy-version --policy-arn "$policy_arn" --version-id "$policy_version" --query "PolicyVersion.Document" --output yaml $AWS_PROFILE_OPT 2>/dev/null)
+        print_cyan "\n[*] Policy Version Details: $policy_arn\n"
     fi
 
-    statement_yaml=$(aws iam get-policy-version --policy-arn "$policy_arn" --version-id "$policy_version" --query "PolicyVersion.Document" --output yaml $AWS_PROFILE_OPT 2>/dev/null)
-
-    print_cyan "\n[*]Policy Version Details: $policy_arn\n"
     echo "$statement_yaml"
 
     # Extract actions using the correct yq v4 syntax
@@ -168,7 +178,7 @@ enumerate_user_permissions() {
     user_info=$(aws sts get-caller-identity --output yaml $AWS_PROFILE_OPT 2>/dev/null)
     
     if [[ -z "$user_info" ]]; then
-        echo "  [!] Failed to retrieve user identity. Check AWS credentials."
+        echo "  [!] Failed to retrieve user identity. Check AWS credentials." 
         exit 1
     fi
 
@@ -178,16 +188,26 @@ enumerate_user_permissions() {
     user_arn=$(echo "$user_info" | yq eval '.Arn' -)
     username=$(echo "$user_arn" | cut -d'/' -f2-)
 
-    # List attached user policies
+    # List attached user policies (managed policies)
+    print_cyan "\n[*] Attached User Policies (Managed):\n"
     attached_policies=$(aws iam list-attached-user-policies --user-name "$username" --query "AttachedPolicies[*].PolicyArn" --output yaml $AWS_PROFILE_OPT 2>/dev/null)
-    
-    print_cyan "\n[*] Attached User Policies:\n"
     echo "$attached_policies"
 
-    # Iterate through policies and fetch details
+    # List inline user policies
+    print_cyan "\n[*] Inline User Policies:\n"
+    inline_policies=$(aws iam list-user-policies --user-name "$username" --output yaml $AWS_PROFILE_OPT 2>/dev/null)
+    echo "$inline_policies"
+
+    # Process managed policies
     echo "$attached_policies" | yq eval '.[]' - | while read -r policy_arn; do
-        print_yellow "\n[*]Processing Policy: $policy_arn\n"
-        fetch_policy_details "$policy_arn"
+        print_yellow "\n[*] Processing Managed Policy: $policy_arn\n"
+        fetch_policy_details "$policy_arn" "false"
+    done
+
+    # Process inline policies
+    echo "$inline_policies" | yq eval '.PolicyNames[]' - | while read -r policy_name; do
+        print_yellow "\n[*] Processing Inline Policy: $policy_name\n"
+        fetch_policy_details "" "true" "$username" "$policy_name"
     done
 }
 
