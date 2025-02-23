@@ -15,24 +15,42 @@ The core AWS enumeration script offers:
 - List and analyze attached user policies
 - Detect potential privilege escalation vectors
 - Support for multiple AWS CLI profiles
-- Optional output to YAML file
+
+## Installation
+1. Ensure you have Python 3.9+ installed
+2. Install Poetry:
+```bash
+brew install poetry
+```
+3. Clone the repository:
+```bash
+git clone https://github.com/yourusername/AWSome-Enum.git
+cd AWSome-Enum
+```
+4. Install dependencies:
+```bash
+poetry install
+```
 
 ## Usage
 ```bash
+# Activate the Poetry environment
+poetry shell
+
 # Basic usage
-./aws-enum.sh enumerate-user-permissions
+python awsome_enum/main.py enumerate-user-permissions
 
 # With specific profile
-./aws-enum.sh --profile my-profile enumerate-user-permissions
+python awsome_enum/main.py --profile my-profile enumerate-user-permissions
 
-# Save output to file
-./aws-enum.sh --output results.yaml enumerate-user-permissions
+# List roles
+python awsome_enum/main.py list-roles pattern1 pattern2
 ```
 
 ## Prerequisites
-- AWS CLI
-- jq
-- yq (v4+)
+- Python 3.9+
+- Poetry
+- AWS CLI configured with appropriate credentials
 
 ## Exam Preparation
 This tool is specifically crafted to support learning and preparation for the Hacktricks AWS Red Team Expert Exam, focusing on:

@@ -1,0 +1,27 @@
+[project]
+name = "awsome-enum"
+version = "1.0.0"
+description = "An iterative AWS permission analyzer that systematically evaluates an AWS profile's access rights and identifies potential privilege escalation paths."
+authors = [
+    {name = "Taraka Vishnumolakala"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "boto3 (>=1.36.26,<2.0.0)",
+    "argparse (>=1.4.0,<2.0.0)",
+    "botocore (>=1.36.26,<2.0.0)",
+    "tabulate (>=0.9.0,<0.10.0)",
+    "pyyaml (>=6.0.2,<7.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "awsome_enum", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+awsome-enum = "awsome_enum.main:main"
