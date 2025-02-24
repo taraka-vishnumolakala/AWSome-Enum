@@ -10,6 +10,7 @@ class AWSEnumerator:
         self.session = boto3.Session(profile_name=profile) if profile else boto3.Session()
         self.iam = self.session.client('iam')
         self.sts = self.session.client('sts')
+        self.secretsmanager = self.session.client('secretsmanager')
         self.interesting_permissions = load_permissions()
 
     def check_interesting_permissions(self, actions):
@@ -22,17 +23,17 @@ class AWSEnumerator:
     def get_caller_identity(self):
         return self.sts.get_caller_identity()
 
-    def list_attached_user_policies(self, username):
-        return self.iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
+    def list_attached_user_policies(self, user_name):
+        return self.iam.list_attached_user_policies(UserName=user_name)['AttachedPolicies']
     
-    def list_attached_role_policies(self, rolename):
-        return self.iam.list_attached_role_policies(RoleName=rolename)['AttachedPolicies']
+    def list_attached_role_policies(self, role_name):
+        return self.iam.list_attached_role_policies(RoleName=role_name)['AttachedPolicies']
 
-    def list_user_policies(self, username):
-        return self.iam.list_user_policies(UserName=username)['PolicyNames']
+    def list_user_policies(self, user_name):
+        return self.iam.list_user_policies(UserName=user_name)['PolicyNames']
     
-    def list_role_policies(self, rolename):
-        return self.iam.list_role_policies(RoleName=rolename)['PolicyNames']
+    def list_role_policies(self, role_name):
+        return self.iam.list_role_policies(RoleName=role_name)['PolicyNames']
 
     def get_policy(self, policy_arn):
         return self.iam.get_policy(PolicyArn=policy_arn)['Policy']
@@ -40,8 +41,11 @@ class AWSEnumerator:
     def get_policy_version(self, policy_arn, version_id):
         return self.iam.get_policy_version(PolicyArn=policy_arn, VersionId=version_id)['PolicyVersion']
 
-    def get_user_policy(self, username, policy_name):
-        return self.iam.get_user_policy(UserName=username, PolicyName=policy_name)['PolicyDocument']
+    def get_user_policy(self, user_name, policy_name):
+        return self.iam.get_user_policy(UserName=user_name, PolicyName=policy_name)['PolicyDocument']
+    
+    def get_role_policy(self, role_name, policy_name):
+        return self.iam.get_role_policy(RoleName=role_name, PolicyName=policy_name)['PolicyDocument']
 
     def list_roles(self):
         return self.iam.list_roles()['Roles']
@@ -56,9 +60,9 @@ class AWSEnumerator:
                 actions.extend(action)
         return actions
 
-    def check_and_list_identities(self, actions):
+    def enumerate_and_list_resources(self, actions):
         if "iam:ListRoles" in actions or "iam:*" in actions:
-            print_cyan("\n[*] Checking for IAM listing permissions:\n")
+            print_cyan("\n[*] Checking for IAM listing permissions:")
             print_yellow("\n[*] Found iam:ListRoles permission - Listing all roles:\n")
             roles = self.list_roles()
             role_data = [[role['RoleName'], role['Arn']] for role in roles]
@@ -70,13 +74,16 @@ class AWSEnumerator:
             user_data = [[user['UserName'], user['Arn']] for user in users]
             print(tabulate(user_data, headers=['User Name', 'ARN'], tablefmt='plain'))
 
-    def enumerate_permissions(self, principal_type):
-        """
-        Enumerate permissions for a given IAM principal (user or role)
+        if "secretsmanager:ListSecrets" in actions or "secretsmanager:*" in actions:
+            print_yellow("\n[*] Found secretsmanager:ListSecrets permission - Listing all secrets:\n")
+            try:
+                secrets = self.secretsmanager.list_secrets()['SecretList']
+                secret_data = [[secret['Name'], secret.get('ARN', 'N/A')] for secret in secrets]
+                print(tabulate(secret_data, headers=['Secret Name', 'ARN'], tablefmt='plain'))
+            except Exception as e:
+                print_red(f"Error listing secrets: {str(e)}")
 
-        Args:
-            principal_type (str): Type of principal ('user' or 'role')
-        """
+    def enumerate_permissions(self, principal_type):
         print_cyan("\n" + "=" * 80)
         print_cyan(f"Enumerating {principal_type.title()} Permissions")
         print_cyan("=" * 80)
@@ -102,9 +109,9 @@ class AWSEnumerator:
                     "Arn": principal_info["Arn"],
                     "RoleName": role_name
                 }
-                print(yaml.dump(principal_info_filtered, default_flow_style=False))
+            print(yaml.dump(principal_info_filtered, default_flow_style=False))
         except Exception as e:
-            print_red(f"  [!] Failed to retrieve {principal_type} information: {str(e)}")
+            print_red(f"  [!] Failed to retrieve {principal_type} information. Check AWS credentials. {str(e)}")
             return
 
         # Fetch attached managed policies
@@ -133,7 +140,7 @@ class AWSEnumerator:
 
         # Process all policies
         for policy in attached_policies:
-            print_yellow(f"\n[*] Processing Managed Policy: {policy['PolicyArn']}\n")
+            print_yellow(f"\n[*] Processing Attached Policy: {policy['PolicyArn']}\n")
             self.fetch_policy_details(policy_arn=policy['PolicyArn'])
 
         for policy_name in inline_policies:
@@ -145,77 +152,38 @@ class AWSEnumerator:
                 policy_name=policy_name
             )
 
-    def fetch_policy_details(self, is_inline=False, policy_arn=None, principal_type=None, role_name=None, policy_name=None):
-        """
-        Fetch and display policy details for either inline or managed policies
-
-        Args:
-            is_inline (bool): Whether the policy is inline
-            policy_arn (str): ARN of managed policy
-            principal_type (str): Type of principal ('user' or 'role')
-            policy_name (str): Name of the inline policy
-        """
+    def fetch_policy_details(self, is_inline=False, policy_arn=None, principal_type=None, name=None, policy_name=None):
         try:
             if is_inline:
                 if principal_type == 'role':
-                    policy = self.iam_client.get_role_policy(
-                        RoleName=role_name,
-                        PolicyName=policy_name
+                    policy_document = self.get_role_policy(
+                        role_name=name,
+                        policy_name=policy_name
                     )
                 else:  # user
-                    policy = self.iam_client.get_user_policy(
-                        UserName=role_name,
-                        PolicyName=policy_name
+                    policy_document = self.get_user_policy(
+                        user_name=name,
+                        policy_name=policy_name
                     )
-                print(yaml.dump(policy['PolicyDocument']))
             else:
-                policy = self.iam_client.get_policy(
-                    PolicyArn=policy_arn
-                )['Policy']
+                policy = self.get_policy(
+                    policy_arn=policy_arn
+                )
 
-                policy_version = self.iam_client.get_policy_version(
-                    PolicyArn=policy_arn,
-                    VersionId=policy['DefaultVersionId']
-                )['PolicyVersion']
+                policy_version = self.get_policy_version(
+                    policy_arn=policy_arn,
+                    version_id=policy['DefaultVersionId']
+                )
 
-                print(yaml.dump(policy_version['Document']))
+                policy_document =  policy_version['Document']
+
+            print(yaml.dump(policy_document))
         except Exception as e:
             print_red(f"  [!] Failed to retrieve policy details: {str(e)}")
-            print_cyan("\n" + "=" * 80)
-            print_cyan("Enumerating User Permissions")
-            print_cyan("=" * 80)
 
-            print_cyan("\n[*] Fetching user identity information:\n")
-            user_info = self.get_caller_identity()
-            if not user_info:
-                print("  [!] Failed to retrieve user identity. Check AWS credentials.")
-                return
-
-            user_info_filtered = {
-                "UserId": user_info["UserId"],
-                "Account": user_info["Account"],
-                "Arn": user_info["Arn"]
-            }
-
-            print(yaml.dump(user_info_filtered, default_flow_style=False))
-
-            username = user_info['Arn'].split('/')[-1]
-
-            print_cyan("\n[*] Attached User Policies (Managed):\n")
-            attached_policies = self.list_attached_user_policies(username)
-            print(yaml.dump(attached_policies))
-
-            print_cyan("\n[*] Inline User Policies:\n")
-            inline_policies = self.list_user_policies(username)
-            print(yaml.dump(inline_policies))
-
-            for policy in attached_policies:
-                print_yellow(f"\n[*] Processing Managed Policy: {policy['PolicyArn']}\n")
-                self.fetch_policy_details(policy_arn=policy['PolicyArn'])
-
-            for policy_name in inline_policies:
-                print_yellow(f"\n[*] Processing Inline Policy: {policy_name}\n")
-                self.fetch_policy_details(is_inline=True, username=username, policy_name=policy_name)
+        actions = self.extract_actions(policy_document)
+        self.enumerate_and_list_resources(actions)
+        self.check_interesting_permissions(actions)
 
     def list_specific_roles(self, role_patterns):
         print_cyan("\n" + "=" * 80)

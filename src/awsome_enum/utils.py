@@ -4,7 +4,7 @@ def load_permissions():
     try:
         with open("interesting_permissions.json", "r") as f:
             permissions = json.load(f)
-        print(f"Loaded {len(permissions)} interesting permissions.")
+        # print(f"Loaded {len(permissions)} interesting permissions.")
         return permissions
     except FileNotFoundError:
         print("Warning: interesting_permissions.json not found in the current directory. Interesting permissions will not be checked.")
