@@ -25,3 +25,6 @@ def print_cyan(message):
 
 def print_red(message):
     print(f"\033[91m{message}\033[0m")
+
+def print_magenta(message):
+    print(f"\033[95m{message}\033[0m")
