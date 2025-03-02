@@ -14,7 +14,7 @@ class IAMService(AWSServiceInterface):
 
     def enumerate(self):
         """Public method for main enumerator to call."""
-        return self.enumerate_permissions()
+        return self._enumerate_permissions()
     
     def set_available_services(self, services_dict):
         """Set available services dictionary from the main enumerator."""
@@ -60,7 +60,7 @@ class IAMService(AWSServiceInterface):
         return self.sts.get_caller_identity()
 
     def _determine_principal_type(self, identity):
-        return 'user' if '/user/' in identity.get('Arn', '') else 'role'
+        return 'user' if 'user/' in identity.get('Arn', '') else 'role'
     
     def _display_principal_info(self, identity, principal_type):
         print_cyan(f"\n[*] Fetching {principal_type} information:\n")

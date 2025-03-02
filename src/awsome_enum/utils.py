@@ -28,6 +28,7 @@ def print_compact_logo():
     """
     print(f"{Fore.YELLOW}{logo}{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}                         AWSome-enum v1.0.0{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}                     Author: Taraka Vishnumolakala{Style.RESET_ALL}")
     print("\nAn AWS security enumeration tool that recursively analyzes permissions, policies, and suggests potential privilege escalation paths.")
     print("-" * 80)
 
