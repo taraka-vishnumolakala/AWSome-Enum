@@ -1,37 +1,150 @@
 import argparse
+import sys
 from .enumerator import AWSEnumerator
+from .utils import print_compact_logo, print_red, print_cyan, print_yellow
+from .services import AVAILABLE_SERVICES
+from .service_subcommands import SERVICE_SUBCOMMANDS
 
 def main():
+    print_compact_logo()
+    
     parser = argparse.ArgumentParser(
-        description="An AWS security tool that systematically analyzes permissions and policies, uncovering potential privilege escalation paths.",
-        usage="%(prog)s [-h] [--profile PROFILE] <command> [<args>]"
+        description="AWSome-enum: AWS resource enumeration tool",
+        add_help=False
     )
-    parser.add_argument("--profile", help="Specify an AWS CLI profile")
+    parser.add_argument("-h", "--help", action="store_true", help="Show help message and exit")
+    parser.add_argument("-p", "--profile", help="Specify an AWS CLI profile")
+    parser.add_argument("-e", "--enumerate", dest="service", metavar="SERVICE", 
+                        nargs="?", const="", 
+                        help="Service to enumerate (e.g., iam, s3). Use without a value to enumerate all services.")
     
-    subparsers = parser.add_subparsers(dest="command", title="commands", metavar="")
+    try:
+        args, remaining = parser.parse_known_args()                
+        
+        if args.help:
+            if args.service == "":
+                print_enumerate_help()
+                return
+            elif args.service and args.service.lower() in AVAILABLE_SERVICES:
+                print_service_subcommands(args.service.lower())
+                return
+            elif args.service:
+                print_enumerate_help()
+                return
+            else:
+                print_general_help()
+                return
+        
+        if args.service is None:
+            print_general_help()
+            return
+
+        if args.service == "":
+            enumerator = AWSEnumerator(profile=args.profile)
+            enumerator.enumerate_all_services()
+            return
+        
+        service_name = args.service.lower()
+        if service_name not in AVAILABLE_SERVICES:
+            print_red(f"Service '{service_name}' is not implemented or available.")
+            print_enumerate_help()
+            return
+        
+        enumerator = AWSEnumerator(profile=args.profile)
+        service = enumerator.get_service(service_name)
+        
+        if not remaining:
+            service.enumerate()
+            return
+        
+        subcommand = remaining[0]
+        subcommand_args = remaining[1:] if len(remaining) > 1 else []
+        
+        if subcommand.lower() in ['-h', '--help']:
+            print_service_subcommands(service_name)
+            return
+        
+        execute_service_command(service, service_name, subcommand, subcommand_args)
     
-    # Enumerate user permissions command
-    enumerate_user_parser = subparsers.add_parser("enumerate-user-permissions", help="Enumerate and analyze permissions for the current user")
-    enumerate_role_parser = subparsers.add_parser("enumerate-role-permissions", help="Enumerate and analyze permissions for the current role")
+    except Exception as e:
+        print_red(f"Error: {str(e)}")
+        print_general_help()
+        return
 
-
-    # List roles command
-    list_roles_parser = subparsers.add_parser("list-roles", help="Search for specific IAM roles")
-    list_roles_parser.add_argument("patterns", nargs="+", help="One or more patterns to match role names")
+def print_general_help():
+    print_cyan("\nUsage: poetry run awsome-enum [-h] [-p PROFILE] [-e [SERVICE]] [subcommand] [args...]")
+    print("\nOptions:")
+    print("  -h, --help             Show help message and exit")
+    print("  -p, --profile [PROFILE]  Specify an AWS CLI profile")
+    print("  -e, --enumerate [SERVICE]  Service to enumerate (e.g., iam, s3, lambda, etc.)")
+    print("                         Use without a value to enumerate all services")
     
-    args = parser.parse_args()
+    print("\nUsage Examples:")
+    print("  poetry run awsome-enum -h                       # Show this help message")
+    print("  poetry run awsome-enum -p [PROFILE] -e [SERVICE] -h          # Show available service-specific commands")
+    
+def print_enumerate_help():
+    print_cyan("\nUsage: poetry run awsome-enum -e [SERVICE] [subcommand] [args...]")
+    print("\nEnumerate AWS services and resources")
+    print("\nAvailable services:")
+    
+    for service_name in sorted(AVAILABLE_SERVICES.keys()):
+        print(f"  {service_name}")
+    
+    print("\nEnumeration Examples:")
+    print("  poetry run awsome-enum --p [PROFILE] -e                       # Enumerates all services with default profile")
+    print("  poetry run awsome-enum -p [PROFILE] -e [SERVICE] -h           # Show available service-specific commands")
+    print("  poetry run awsome-enum -p [PROFILE] -e [SERVICE] [subcommand] [args...]  # Execute a specific subcommand")
 
-    if args.command == "enumerate-user-permissions":
-        enumerator = AWSEnumerator(profile=args.profile)
-        enumerator.enumerate_permissions(principal_type='user')
-    elif args.command == "enumerate-role-permissions":
-        enumerator = AWSEnumerator(profile=args.profile)
-        enumerator.enumerate_permissions(principal_type='role')
-    elif args.command == "list-roles":
-        enumerator = AWSEnumerator(profile=args.profile)
-        enumerator.list_specific_roles(args.patterns)
+def print_service_subcommands(service_name):
+    print_cyan(f"\nAvailable subcommands for {service_name.upper()} service:")
+    
+    subcommands = SERVICE_SUBCOMMANDS.get(service_name, {})
+    
+    if subcommands:
+        print("\nCommand                     Description")
+        print("-------------------------  ------------------------------------------------")
+        
+        for cmd, info in sorted(subcommands.items()):
+            print(f"  {cmd:<25} {info['description']}")
+        
+        print("\nUsage examples:")
+        for cmd, info in sorted(subcommands.items()):
+            print(f"  poetry run awsome-enum -e {service_name} {info['usage']}")
     else:
-        parser.print_help()
+        print_yellow(f"  No additional subcommands available for {service_name}")
+        print(f"  Use 'poetry run awsome-enum -e {service_name}' for basic enumeration")
+
+def execute_service_command(service, service_name, subcommand, arguments):
+    if service_name not in SERVICE_SUBCOMMANDS or subcommand not in SERVICE_SUBCOMMANDS[service_name]:
+        print_red(f"Unknown subcommand '{subcommand}' for service '{service_name}'")
+        print_service_subcommands(service_name)
+        return
+    
+    method_name = subcommand.replace("-", "_")
+    
+    method = getattr(service, method_name, None)
+    
+    if method is None:
+        print_red(f"Method '{method_name}' not found in service '{service_name}'")
+        return
+    
+    cmd_info = SERVICE_SUBCOMMANDS[service_name][subcommand]
+    
+    requires_args = cmd_info.get('requires_args', False)
+    
+    if requires_args and not arguments:
+        print_red(f"This subcommand requires additional arguments")
+        print_yellow(f"Usage: poetry run awsome-enum -e {service_name} {cmd_info.get('usage', '')}")
+        return
+    
+    try:
+        if arguments:
+            method(arguments)
+        else:
+            method()
+    except Exception as e:
+        print_red(f"Error executing {subcommand}: {str(e)}")
 
 if __name__ == "__main__":
     main()
