@@ -243,28 +243,32 @@ class IAMService(AWSServiceInterface):
 
     def _enumerate_and_list_resources(self, action, resource, is_resource_wildcard=False):
         service_prefix = action.split(':')[0] if ':' in action else None
+        print_line = True
         
         if not service_prefix:
             return
 
         if is_resource_wildcard:
             print("\n" + "-" * 100)
+            print_line = False
             print_green(f"\n⚠️  Resource is a wildcard (*) for action: {action}")
 
         if self.available_services and service_prefix in self.available_services:
             service = self.available_services[service_prefix]
             if action in service.supported_actions:
-                if not is_resource_wildcard:
+                if print_line:
                     print("\n" + "-" * 100)
+                    print_line = False
                 
                 print_yellow(f"\n[*] Enumerating permissions for action: {action} on resource: {resource}")
                 service.handle_permission_action(action, resource)
             else: 
-                if not is_resource_wildcard and self.debug:
+                if print_line and self.debug:
                     print("\n" + "-" * 100)
+                    print_line = False
                     self.handle_unimplemented_action(action, resource)
 
-        self.check_interesting_permissions(action, resource)
+        self.check_interesting_permissions(action, resource, print_line)
 
     # subcommand methods
     def find_roles(self, role_patterns):

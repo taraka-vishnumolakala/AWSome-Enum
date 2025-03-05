@@ -17,7 +17,7 @@ class AWSServiceInterface(ABC):
         """Initialize the boto3 client for this aws service."""
         return self.session.client(self.service_name)
     
-    def check_interesting_permissions(self, action, resource):
+    def check_interesting_permissions(self, action, resource, print_line):
         """
         Check if a permission action is interesting and print a message if it is.
     
@@ -28,6 +28,8 @@ class AWSServiceInterface(ABC):
         Prints privilege escalation info if the action is interesting.
         """
         if action in self.interesting_permissions:
+            if print_line:
+                print("\n" + "-" * 100)
             print()
             print_green(f"[!] '{action}' is an Interesting Permission for possible privilege escalation.")
             print_green(f"➡️  More info: {self.interesting_permissions[action]}")
@@ -78,7 +80,7 @@ class AWSServiceInterface(ABC):
     
     def handle_unimplemented_action(self, action, resource):
         print_red(f"\n❌ Action '{action}' is set on resource '{resource}'")
-        print_red("   Manual investigation recommended as this permission is not currently supported.")
+        print_red("   Manual investigation recommended as this permission is not currently supported for auto enumeration.")
     
     @abstractmethod
     def enumerate(self):

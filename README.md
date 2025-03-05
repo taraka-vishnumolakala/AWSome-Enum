@@ -1,73 +1,105 @@
-# AWSome-Enum
+# AWSome-enum
+
+```bash
+     █████╗ ██╗    ██╗███████╗ ██████╗ ███╗   ███╗███████╗      ███████╗███╗   ██╗██╗   ██╗███╗   ███╗
+    ██╔══██╗██║    ██║██╔════╝██╔═══██╗████╗ ████║██╔════╝      ██╔════╝████╗  ██║██║   ██║████╗ ████║
+    ███████║██║ █╗ ██║███████╗██║   ██║██╔████╔██║█████╗        ███████╗██╔██╗ ██║██║   ██║██╔████╔██║
+    ██╔══██║██║███╗██║╚════██║██║   ██║██║╚██╔╝██║██╔══╝        ██╔════╝██║╚██╗██║██║   ██║██║╚██╔╝██║
+    ██║  ██║╚███╔███╔╝███████║╚██████╔╝██║ ╚═╝ ██║███████╗      ███████╗██║ ╚████║╚██████╔╝██║ ╚═╝ ██║
+    ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝      ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚═╝
+```
 
 ## Overview
-AWSome-Enum is a comprehensive AWS security enumeration and permission analysis tool developed as part of preparation for the Hacktricks AWS Red Team Expert Exam. The project focuses on providing in-depth insights into AWS account configurations and user permissions.
+AWSome-enum is a comprehensive AWS security enumeration and privilege escalation detection tool designed for AWS penetration testing and security auditing. The tool recursively analyzes IAM permissions, resource policies, and identifies potential privilege escalation paths within AWS environments.
 
-## Key Features
-- 🔍 AWS User Permission Enumeration
-- 🚨 Interesting Permissions Detection
-- 📋 Detailed Policy Analysis
-- 🔐 Security Reconnaissance
+## Tool Capabilities
+AWSome-enum is designed with a modular approach to AWS service enumeration. Current capabilities include:
 
-## Script Capabilities
-The core AWS enumeration script offers:
-- Retrieve user identity information
-- List and analyze attached user policies
-- Detect potential privilege escalation vectors
-- Support for multiple AWS CLI profiles
+- **Core Functionality**:
+  - Identify and analyze IAM permissions and policies
+  - Flag potentially dangerous permissions with detailed explanations
+  - Provide links to relevant privilege escalation techniques
+  - Perform targeted analysis of specific resources
+
+The tool is built with an extensible architecture to support additional AWS services as they are implemented.
 
 ## Installation
-1. Ensure you have Python 3.9+ installed
-2. Install Poetry:
 ```bash
-brew install poetry
-```
-3. Clone the repository:
-```bash
-git clone https://github.com/yourusername/AWSome-Enum.git
-cd AWSome-Enum
-```
-4. Install dependencies:
-```bash
+# Install Poetry if not already installed
+pip install poetry
+
+# Clone the repository
+git clone https://github.com/yourusername/AWSome-enum.git
+cd AWSome-enum
+
+# Install dependencies using Poetry
 poetry install
 ```
 
 ## Usage
+AWSome-enum uses Poetry for dependency management and execution:
+
 ```bash
-# Activate the Poetry environment
-poetry shell
+# Basic enumeration of all services
+Usage: poetry run awsome-enum [-h] [-p PROFILE] [-e [SERVICE]] [subcommand] [args...]
 
-# Basic usage
-python awsome_enum/main.py enumerate-user-permissions
+Options:
+  -h, --help                 # Show help message and exit
+  -p, --profile [PROFILE]    # Specify an AWS CLI profile
+  -e, --enumerate [SERVICE]  # Service to enumerate (e.g., iam, s3, lambda, etc.)
+                               Use without a value to enumerate all services
 
-# With specific profile
-python awsome_enum/main.py --profile my-profile enumerate-user-permissions
-
-# List roles
-python awsome_enum/main.py list-roles pattern1 pattern2
+Usage Examples:
+  poetry run awsome-enum -h                                    # Show this help message
+  poetry run awsome-enum -p [PROFILE] -e [SERVICE] -h          # Show available service-specific commands
 ```
+
+### Service-Specific Enumeration
+```bash
+Usage: poetry run awsome-enum -e [SERVICE] [subcommand] [args...]
+
+Enumerate AWS services and resources
+
+Available services:
+  iam
+  kms
+  s3
+  secretsmanager
+
+Enumeration Examples:
+  poetry run awsome-enum --p [PROFILE] -e                       # Enumerates all services with default profile
+  poetry run awsome-enum -p [PROFILE] -e [SERVICE] -h           # Show available service-specific commands
+  poetry run awsome-enum -p [PROFILE] -e [SERVICE] [subcommand] [args...]  # Execute a specific subcommand
+```
+
+### Advanced Usage
+```bash
+# Example usage for iam service
+Available subcommands for IAM service:
+
+Command                     Description
+-------------------------  ------------------------------------------------
+  find-roles                Finds all IAM roles with matching names
+
+Usage examples:
+  poetry run awsome-enum -e iam find-roles <pattern1> [<pattern2> ...]
+```
+
+## Privilege Escalation Detection
+AWSome-enum automatically flags and highlights permissions that could lead to privilege escalation by providing links to relevant sections of the [Cloud Hacktricks Wiki](https://cloud.hacktricks.wiki/) for detailed exploitation techniques.
 
 ## Prerequisites
 - Python 3.9+
-- Poetry
 - AWS CLI configured with appropriate credentials
+- AWS credentials with at least read access to resources
 
-## Exam Preparation
-This tool is specifically crafted to support learning and preparation for the Hacktricks AWS Red Team Expert Exam, focusing on:
-- AWS IAM permission analysis
-- Security misconfiguration detection
-- Advanced cloud infrastructure reconnaissance
+## Security Considerations
+- For ethical use in authorized environments only
+- Obtain proper permissions before running against any AWS account
+- Some commands may generate significant AWS API activity
 
-## Interesting Permissions
-The script leverages a `interesting_permissions.json` file to flag potentially risky or escalation-prone permissions, providing insights into potential security weaknesses.
-
-## Disclaimer
-- For educational and authorized testing purposes only
-- Always obtain proper authorization before security testing
-- Use responsibly and ethically
-
-## Contributing
-Contributions that enhance AWS security enumeration techniques or support exam preparation are welcome.
+## Author
+Taraka Vishnumolakala
 
 ## License
 BSD 3-Clause License
@@ -99,6 +131,3 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-## Author
-Taraka Vishnumolakala
