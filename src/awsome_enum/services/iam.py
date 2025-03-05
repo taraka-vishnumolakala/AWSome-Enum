@@ -1,23 +1,63 @@
 import yaml
+import json
 from tabulate import tabulate
 from .aws_service_interface import AWSServiceInterface
-from ..utils import load_permissions, print_cyan, print_yellow, print_green, print_red, print_magenta
+from ..utils import print_cyan, print_yellow, print_green, print_red, print_magenta
 
 class IAMService(AWSServiceInterface):
     """Implementation of AWS IAM service enumeration and exploitation."""
     
-    def __init__(self, session=None):
-        super().__init__(session, 'iam')
+    def __init__(self, session=None, debug=False):
+        super().__init__(session=session, service_name='iam', debug=debug)
         self.sts = self.session.client('sts')
-        self.interesting_permissions = load_permissions()
-        self.available_services = None  # Will be set from outside
+        self.available_services = None
+        self.all_resource_actions = {}
+        self.supported_actions = [
+            "iam:ListRoles", "iam:ListUsers", "iam:GetPolicyVersion", "iam:*"
+        ]
 
     def enumerate(self):
-        """Public method for main enumerator to call."""
         return self._enumerate_permissions()
     
+    def handle_permission_action(self, action, resource):
+        if action in ("iam:ListRoles", "iam:*"):
+            print_yellow("\n[*] Found iam:ListRoles permission - Listing all roles:\n")
+            try:
+                roles = self.list_roles()
+                if roles:
+                    role_data = [[role['RoleName'], role['Arn']] for role in roles]
+                    print(tabulate(role_data, headers=['Role Name', 'ARN'], tablefmt='plain'))
+                    print_magenta("\n💡 Tip: Use 'awsome-enum --profile [profile] find-roles [role-name]' to enumerate permissions for specific roles")
+                else:
+                    print_yellow("  No roles found.")
+            except Exception as e:
+                print_red(f"Error listing roles: {str(e)}")
+
+        elif action in ("iam:ListUsers", "iam:*"):
+            print_yellow("\n[*] Found iam:ListUsers permission - Listing all users:\n")
+            try:
+                users = self.client.list_users()['Users']
+                if users:
+                    user_data = [[user['UserName'], user['Arn']] for user in users]
+                    print(tabulate(user_data, headers=['User Name', 'ARN'], tablefmt='plain'))
+                else:
+                    print_yellow("  No users found.")
+            except Exception as e:
+                print_red(f"Error listing users: {str(e)}")
+
+        elif action in ("iam:GetPolicyVersion", "iam:*"):
+            if resource.startswith('arn:aws:iam::'):
+                print_yellow(f"\n[*] Found iam:GetPolicyVersion permissions on '{resource}'. Listing policy details:\n")
+                try:
+                    policy_arn = resource
+                    policy = self.get_policy(policy_arn)
+                    policy_version = self.get_policy_version(policy_arn, policy['DefaultVersionId'])
+                    policy_document = policy_version['Document']
+                    print(yaml.dump(policy_document))
+                except Exception as e:
+                    print_red(f"Error listing policies: {str(e)}")
+    
     def set_available_services(self, services_dict):
-        """Set available services dictionary from the main enumerator."""
         self.available_services = services_dict
     
     def _enumerate_permissions(self):
@@ -25,12 +65,14 @@ class IAMService(AWSServiceInterface):
         print_cyan("Enumerating IAM Resources and Permissions")
         print_cyan("*" * 80)
 
+        self.all_resource_actions = {}
+
         identity = self.get_caller_identity()
         principal_type = self._determine_principal_type(identity)
 
         self._display_principal_info(identity, principal_type)
 
-        policies = self.fetch_principal_policies(identity, principal_type)
+        policies = self._fetch_principal_policies(identity, principal_type)
         attached_policies = policies['attached_policies']
         inline_policies = policies['inline_policies']
         principal_name = policies['principal_name']
@@ -44,20 +86,7 @@ class IAMService(AWSServiceInterface):
         self._process_attached_policies(attached_policies)
         self._process_inline_policies(inline_policies, principal_type, principal_name)
 
-    def check_interesting_permissions(self, policy_document):
-        resource_actions = self._parse_policy_document(policy_document)
-        
-        for resource, actions in resource_actions.items():
-            for action in actions:
-                is_resource_wildcard = resource == '*'
-                
-                if action in self.interesting_permissions:
-                    print_green(f"\n🔍 Found potentially interesting permission: {action}")
-                    
-                self.enumerate_and_list_resources(action, resource, is_resource_wildcard)
-                    
-    def get_caller_identity(self):
-        return self.sts.get_caller_identity()
+        self._execute_deep_enumeration()
 
     def _determine_principal_type(self, identity):
         return 'user' if 'user/' in identity.get('Arn', '') else 'role'
@@ -86,7 +115,7 @@ class IAMService(AWSServiceInterface):
                 "RoleName": role_name
             }
         
-    def fetch_principal_policies(self, identity, principal_type):
+    def _fetch_principal_policies(self, identity, principal_type):
         try:
             result = {
                 'attached_policies': [],
@@ -142,7 +171,7 @@ class IAMService(AWSServiceInterface):
             )
 
             self._display_policy_document(policy_document)
-            self.check_interesting_permissions(policy_document)
+            self._parse_policy_document(policy_document)
 
         except Exception as e:
             print_red(f"  [!] Failed to retrieve policy details: {str(e)}")
@@ -159,7 +188,7 @@ class IAMService(AWSServiceInterface):
                 role_name=name,
                 policy_name=policy_name
             )
-        else:  # user
+        else:
             return self.get_user_policy(
                 user_name=name,
                 policy_name=policy_name
@@ -175,131 +204,69 @@ class IAMService(AWSServiceInterface):
     
     def _display_policy_document(self, policy_document):
         print(yaml.dump(policy_document))
-        print("\n" + "-" * 100)
 
     def _parse_policy_document(self, policy_document):
-        resource_actions = {}
-
-        for statement in policy_document.get('Statement', []):
-            # Skip DENY statements
-            if statement.get('Effect', '').lower() == 'deny':
-                print("\n" + "-" * 100)
-                print_red(f"\n⛔ Skipping enumeration - Effect is DENY")
-                continue
-
-            # Skip statements with conditions
-            if statement.get('Condition'):
-                print("\n" + "-" * 100)
-                print_red(f"\n🔍 Conditions exist on this policy. Manual intervention needed.")
-                print(yaml.dump(statement))
-                continue
-
-            # Get actions (handle both string and list)
-            actions = statement.get('Action', [])
-            if isinstance(actions, str):
-                actions = [actions]
-
-            # Get resources (handle both string and list)
-            resources = statement.get('Resource', [])
-            if isinstance(resources, str):
-                resources = [resources]
-
-            # Add actions to each resource
-            for resource in resources:
-                if resource not in resource_actions:
-                    resource_actions[resource] = []
-                resource_actions[resource].extend(actions)
-
-        # Remove duplicates from action lists
-        for resource in resource_actions:
-            resource_actions[resource] = list(set(resource_actions[resource]))
-
-        return resource_actions
-
-    def enumerate_and_list_resources(self, action, resource, is_resource_wildcard=False):
-        """
-        Centralized method to handle enumeration of resources based on discovered permissions.
-        This method will analyze the action and delegate to the appropriate service for enumeration.
-        """
-        # Skip if no interesting permissions found
-        if action not in self.interesting_permissions and not self._is_enumeration_action(action):
+        resource_actions = self.parse_policy_document(policy_document)
+        
+        for resource, actions in resource_actions.items():
+            if resource not in self.all_resource_actions:
+                self.all_resource_actions[resource] = []
+            for action in actions:
+                if action not in self.all_resource_actions[resource]:
+                    self.all_resource_actions[resource].append(action)
+    
+    def _execute_deep_enumeration(self):
+        if not self.all_resource_actions:
+            print_yellow("\n[*] No permissions found to enumerate.")
             return
+            
+        print_cyan("\n" + "*" * 80)
+        print_cyan(f"Found {len(self.all_resource_actions)} resources with permissions")
+        print_cyan("*" * 80)
         
-        # Warn about wildcard resources
-        if is_resource_wildcard:
-            print_green(f"\n⚠️  Resource is a wildcard (*) for action: {action}")
+        for i, (resource, actions) in enumerate(self.all_resource_actions.items()):
+            print_yellow(f"\n[{i+1}] Resource: {resource}")
+            print_yellow(f"    Actions: {', '.join(sorted(actions))}")
         
-        # Handle IAM service enumeration
-        self._handle_iam_enumeration(action, resource)
-        
-        # Handle other services based on action prefix
+        print_magenta("\nWould you like to perform detailed enumeration of all permissions in the identified policies? (y/n): ")
+        user_choice = input().strip().lower()
+
+        if user_choice == 'y' or user_choice == 'yes':
+            # print(yaml.dump(self.all_resource_actions))
+            for resource, actions in self.all_resource_actions.items():
+                is_wildcard = '*' in resource
+                for action in actions:
+                    self._enumerate_and_list_resources(action, resource, is_wildcard)
+        else:
+            print_red("\nDetailed permission enumeration cancelled. Thank you for using AWSome-enum.")
+            return
+
+    def _enumerate_and_list_resources(self, action, resource, is_resource_wildcard=False):
         service_prefix = action.split(':')[0] if ':' in action else None
         
         if not service_prefix:
             return
-            
-        # Trigger enumeration for other services if available
-        if service_prefix != 'iam' and self.available_services and service_prefix in self.available_services:
-            print_yellow(f"\n[*] Found {service_prefix} permissions - Delegating to {service_prefix.upper()} service")
-            service = self.available_services[service_prefix](self.session)
-            
-            # If the service implements a method to handle specific actions, call it
-            if hasattr(service, 'handle_permission_action'):
-                service.handle_permission_action(action, resource, is_resource_wildcard)
-            # Otherwise just enumerate the service
-            else:
-                service.enumerate()
 
-    def _is_enumeration_action(self, action):
-        """Check if this is an enumeration action."""
-        enumeration_actions = [
-            'iam:List*', 'iam:Get*', 'iam:*',
-            's3:List*', 's3:Get*', 's3:*',
-            'secretsmanager:List*', 'secretsmanager:Get*', 'secretsmanager:*',
-            'kms:List*', 'kms:Get*', 'kms:*',
-            # Add more enumeration patterns for other services
-        ]
-        
-        for pattern in enumeration_actions:
-            if pattern.endswith('*'):
-                prefix = pattern[:-1]
-                if action.startswith(prefix):
-                    return True
-            elif action == pattern:
-                return True
+        if is_resource_wildcard:
+            print("\n" + "-" * 100)
+            print_green(f"\n⚠️  Resource is a wildcard (*) for action: {action}")
+
+        if self.available_services and service_prefix in self.available_services:
+            service = self.available_services[service_prefix]
+            if action in service.supported_actions:
+                if not is_resource_wildcard:
+                    print("\n" + "-" * 100)
                 
-        return False
-        
-    def _handle_iam_enumeration(self, action, resource):
-        """Handle IAM-specific enumeration actions."""
-        # List Roles
-        if "iam:ListRoles" in action or "iam:*" in action:
-            print_yellow("\n[*] Found iam:ListRoles permission - Listing all roles:\n")
-            roles = self.list_roles()
-            role_data = [[role['RoleName'], role['Arn']] for role in roles]
-            print(tabulate(role_data, headers=['Role Name', 'ARN'], tablefmt='plain'))
-            print_magenta("\n💡 Tip: Use 'awsome-enum --profile [profile] list-role [role-name]' to enumerate permissions for specific roles")
+                print_yellow(f"\n[*] Enumerating permissions for action: {action} on resource: {resource}")
+                service.handle_permission_action(action, resource)
+            else: 
+                if not is_resource_wildcard and self.debug:
+                    print("\n" + "-" * 100)
+                    self.handle_unimplemented_action(action, resource)
 
-        # List Users
-        if "iam:ListUsers" in action or "iam:*" in action:
-            print_yellow("\n[*] Found iam:ListUsers permission - Listing all users:\n")
-            users = self.client.list_users()['Users']
-            user_data = [[user['UserName'], user['Arn']] for user in users]
-            print(tabulate(user_data, headers=['User Name', 'ARN'], tablefmt='plain'))
+        self.check_interesting_permissions(action, resource)
 
-        # Get Policy Version
-        if "iam:GetPolicyVersion" in action or "iam:*" in action:
-            if resource.startswith('arn:aws:iam::'):
-                print_yellow(f"\n[*] Found iam:GetPolicyVersion permissions on '{resource}'. Listing policy details:\n")
-                try:
-                    policy_arn = resource
-                    policy = self.get_policy(policy_arn)
-                    policy_version = self.get_policy_version(policy_arn, policy['DefaultVersionId'])
-                    policy_document = policy_version['Document']
-                    print(yaml.dump(policy_document))
-                except Exception as e:
-                    print_red(f"Error listing policies: {str(e)}")
-
+    # subcommand methods
     def find_roles(self, role_patterns):
         print_cyan("\n" + "=" * 80)
         print_cyan("Searching for Specific Roles")
@@ -307,39 +274,90 @@ class IAMService(AWSServiceInterface):
 
         print_cyan("\n[*] Searching for roles matching the provided patterns:\n")
 
-        roles = self.list_roles()
-        found_roles = False
+        try:
+            roles = self.list_roles()
+            found_roles = False
 
-        for pattern in role_patterns:
-            print_yellow(f"\n[*] Searching for roles matching: {pattern}\n")
-            matching_roles = [role for role in roles if pattern.lower() in role['RoleName'].lower()]
+            for pattern in role_patterns:
+                print_yellow(f"\n[*] Searching for roles matching: {pattern}\n")
+                matching_roles = [role for role in roles if pattern.lower() in role['RoleName'].lower()]
 
-            if matching_roles:
-                found_roles = True
-                for role in matching_roles:
-                    print_green(f"\n [*]Found a matching role {role['RoleName']} with details:\n")
-                    print(yaml.dump(role))
-            else:
-                print_yellow(f"  No roles found matching pattern: {pattern}")
+                if matching_roles:
+                    found_roles = True
+                    for role in matching_roles:
+                        print_green(f"\n [*]Found a matching role {role['RoleName']} with details:\n")
+                        print(yaml.dump(role))
+                else:
+                    print_yellow(f"  No roles found matching pattern: {pattern}")
 
-        if not found_roles:
-            print_yellow("\nNo matching roles found for any of the provided patterns.")
+            if not found_roles:
+                print_yellow("\nNo matching roles found for any of the provided patterns.")
+        except Exception as e:
+            print_red(f"Error finding roles: {str(e)}")
 
     # Wrapper methods for IAM API calls
+    def get_caller_identity(self):
+        return self.sts.get_caller_identity()
+    
     def list_roles(self):
-        return self.client.list_roles()['Roles']
+        response = self.client.list_roles()
+        roles = response['Roles']
+        
+        # Handle pagination
+        while response.get('IsTruncated', False):
+            marker = response['Marker']
+            response = self.client.list_roles(Marker=marker)
+            roles.extend(response['Roles'])
+            
+        return roles
     
     def list_attached_user_policies(self, user_name):
-        return self.client.list_attached_user_policies(UserName=user_name)['AttachedPolicies']
+        response = self.client.list_attached_user_policies(UserName=user_name)
+        policies = response['AttachedPolicies']
+        
+        # Handle pagination
+        while response.get('IsTruncated', False):
+            marker = response['Marker']
+            response = self.client.list_attached_user_policies(UserName=user_name, Marker=marker)
+            policies.extend(response['AttachedPolicies'])
+            
+        return policies
     
     def list_attached_role_policies(self, role_name):
-        return self.client.list_attached_role_policies(RoleName=role_name)['AttachedPolicies']
+        response = self.client.list_attached_role_policies(RoleName=role_name)
+        policies = response['AttachedPolicies']
+        
+        # Handle pagination
+        while response.get('IsTruncated', False):
+            marker = response['Marker']
+            response = self.client.list_attached_role_policies(RoleName=role_name, Marker=marker)
+            policies.extend(response['AttachedPolicies'])
+            
+        return policies
     
     def list_user_policies(self, user_name):
-        return self.client.list_user_policies(UserName=user_name)['PolicyNames']
+        response = self.client.list_user_policies(UserName=user_name)
+        policies = response['PolicyNames']
+        
+        # Handle pagination
+        while response.get('IsTruncated', False):
+            marker = response['Marker']
+            response = self.client.list_user_policies(UserName=user_name, Marker=marker)
+            policies.extend(response['PolicyNames'])
+            
+        return policies
     
     def list_role_policies(self, role_name):
-        return self.client.list_role_policies(RoleName=role_name)['PolicyNames']
+        response = self.client.list_role_policies(RoleName=role_name)
+        policies = response['PolicyNames']
+        
+        # Handle pagination
+        while response.get('IsTruncated', False):
+            marker = response['Marker']
+            response = self.client.list_role_policies(RoleName=role_name, Marker=marker)
+            policies.extend(response['PolicyNames'])
+            
+        return policies
     
     def get_policy(self, policy_arn):
         return self.client.get_policy(PolicyArn=policy_arn)['Policy']

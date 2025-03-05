@@ -32,13 +32,6 @@ def print_compact_logo():
     print("\nAn AWS security enumeration tool that recursively analyzes permissions, policies, and suggests potential privilege escalation paths.")
     print("-" * 80)
 
-
-def print_interesting_permissions(self, action, resource):
-    print("\n")
-    print_green(f"[!] '{action}' is an Interesting Permission for possible privilege escalation.")
-    print_green(f"➡️  More info: {self.interesting_permissions[action]}")
-    print_green(f"🎯 Resource: {resource}")  
-
 def print_green(message):
     print(f"\033[92m{message}\033[0m")
 

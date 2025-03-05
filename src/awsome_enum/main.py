@@ -14,6 +14,7 @@ def main():
     )
     parser.add_argument("-h", "--help", action="store_true", help="Show help message and exit")
     parser.add_argument("-p", "--profile", help="Specify an AWS CLI profile")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug output")
     parser.add_argument("-e", "--enumerate", dest="service", metavar="SERVICE", 
                         nargs="?", const="", 
                         help="Service to enumerate (e.g., iam, s3). Use without a value to enumerate all services.")
@@ -40,7 +41,7 @@ def main():
             return
 
         if args.service == "":
-            enumerator = AWSEnumerator(profile=args.profile)
+            enumerator = AWSEnumerator(profile=args.profile, debug=args.debug)
             enumerator.enumerate_all_services()
             return
         
@@ -50,8 +51,8 @@ def main():
             print_enumerate_help()
             return
         
-        enumerator = AWSEnumerator(profile=args.profile)
-        service = enumerator.get_service(service_name)
+        enumerator = AWSEnumerator(profile=args.profile, debug=args.debug)
+        service = enumerator.get_service_instance(service_name)
         
         if not remaining:
             service.enumerate()
@@ -74,13 +75,13 @@ def main():
 def print_general_help():
     print_cyan("\nUsage: poetry run awsome-enum [-h] [-p PROFILE] [-e [SERVICE]] [subcommand] [args...]")
     print("\nOptions:")
-    print("  -h, --help             Show help message and exit")
-    print("  -p, --profile [PROFILE]  Specify an AWS CLI profile")
-    print("  -e, --enumerate [SERVICE]  Service to enumerate (e.g., iam, s3, lambda, etc.)")
-    print("                         Use without a value to enumerate all services")
+    print("  -h, --help                 # Show help message and exit")
+    print("  -p, --profile [PROFILE]    # Specify an AWS CLI profile")
+    print("  -e, --enumerate [SERVICE]  # Service to enumerate (e.g., iam, s3, lambda, etc.)")
+    print("                               Use without a value to enumerate all services")
     
     print("\nUsage Examples:")
-    print("  poetry run awsome-enum -h                       # Show this help message")
+    print("  poetry run awsome-enum -h                                    # Show this help message")
     print("  poetry run awsome-enum -p [PROFILE] -e [SERVICE] -h          # Show available service-specific commands")
     
 def print_enumerate_help():
