@@ -228,7 +228,7 @@ class IAMService(AWSServiceInterface):
             print_yellow(f"\n[{i+1}] Resource: {resource}")
             print_yellow(f"    Actions: {', '.join(sorted(actions))}")
         
-        print_magenta("\nWould you like to perform detailed enumeration of all permissions in the identified policies? (y/n): ")
+        print("\nWould you like to perform detailed enumeration of all permissions in the identified policies? (y/n): ", end="")
         user_choice = input().strip().lower()
 
         if user_choice == 'y' or user_choice == 'yes':
