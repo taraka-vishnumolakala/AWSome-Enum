@@ -27,7 +27,7 @@ class IAMService(AWSServiceInterface):
                 if roles:
                     role_data = [[role['RoleName'], role['Arn']] for role in roles]
                     print(tabulate(role_data, headers=['Role Name', 'ARN'], tablefmt='plain'))
-                    print_magenta("\n💡 Tip: Use 'awsome-enum --profile [profile] find-roles [role-name]' to enumerate permissions for specific roles")
+                    print_magenta("\n💡 Tip: Use 'awsome-enum --profile [profile] -e iam find-role [role-name]' to enumerate permissions for specific roles")
                 else:
                     print_yellow("  No roles found.")
             except Exception as e:
@@ -131,6 +131,7 @@ class IAMService(AWSServiceInterface):
             else:
                 role_arn = identity["Arn"]
                 role_name = role_arn.split('/')[-2] if 'assumed-role' in role_arn else role_arn.split('/')[-1]
+
                 result['attached_policies'] = self.list_attached_role_policies(role_name)
                 result['inline_policies'] = self.list_role_policies(role_name)
                 result['principal_name'] = role_name
@@ -271,33 +272,55 @@ class IAMService(AWSServiceInterface):
         self.check_interesting_permissions(action, resource, print_line)
 
     # subcommand methods
-    def find_roles(self, role_patterns):
+    def find_role(self, role_name):
         print_cyan("\n" + "=" * 80)
-        print_cyan("Searching for Specific Roles")
+        print_cyan("Searching for Specific Role")
         print_cyan("=" * 80)
-
-        print_cyan("\n[*] Searching for roles matching the provided patterns:\n")
-
+    
         try:
             roles = self.list_roles()
-            found_roles = False
+            matching_role = None
+    
+            # Case-insensitive exact match
+            for role in roles:
+                if role_name.lower() == role['RoleName'].lower():
+                    matching_role = role
+                    break
+    
+            if matching_role:
+                print_green(f"\n[*] Found role: {matching_role['RoleName']}")
+                print_yellow("\nRole Details:")
+                print(yaml.dump(matching_role))
 
-            for pattern in role_patterns:
-                print_yellow(f"\n[*] Searching for roles matching: {pattern}\n")
-                matching_roles = [role for role in roles if pattern.lower() in role['RoleName'].lower()]
-
-                if matching_roles:
-                    found_roles = True
-                    for role in matching_roles:
-                        print_green(f"\n [*]Found a matching role {role['RoleName']} with details:\n")
-                        print(yaml.dump(role))
-                else:
-                    print_yellow(f"  No roles found matching pattern: {pattern}")
-
-            if not found_roles:
-                print_yellow("\nNo matching roles found for any of the provided patterns.")
+                # Get attached policies
+                try:
+                    attached_policies = self.list_attached_role_policies(matching_role['RoleName'])
+                    print_cyan("\n[*] Attached Role Policies:")
+                    if attached_policies:
+                        print(yaml.dump(attached_policies))
+                    else:
+                        print_yellow("No attached policies found")
+                except Exception as e:
+                    print_red(f"Error listing attached policies: {str(e)}")
+    
+                # Get inline policies
+                try:
+                    inline_policies = self.list_role_policies(matching_role['RoleName'])
+                    print_cyan("\n[*] Inline Role Policies:")
+                    if inline_policies:
+                        for policy_name in inline_policies:
+                            policy_doc = self.get_role_policy(matching_role['RoleName'], policy_name)
+                            print_yellow(f"\nPolicy Name: {policy_name}")
+                            print(yaml.dump(policy_doc))
+                    else:
+                        print_yellow("No inline policies found")
+                except Exception as e:
+                    print_red(f"Error listing inline policies: {str(e)}")
+            else:
+                print_yellow(f"\nNo role found matching: {role_name}")
+    
         except Exception as e:
-            print_red(f"Error finding roles: {str(e)}")
+            print_red(f"Error finding role: {str(e)}")
 
     # Wrapper methods for IAM API calls
     def get_caller_identity(self):

@@ -1,7 +1,8 @@
 import yaml
 from tabulate import tabulate
 from .aws_service_interface import AWSServiceInterface
-from ..utils import print_cyan, print_yellow, print_red, print_green
+from botocore.exceptions import ClientError
+from ..utils import print_cyan, print_yellow, print_red, print_green, print_magenta
 
 class S3Service(AWSServiceInterface):
     def __init__(self, session=None, debug=False):
@@ -25,7 +26,9 @@ class S3Service(AWSServiceInterface):
     def handle_permission_action(self, action, resource):
         if "s3:ListAllMyBuckets" in action or "s3:*" in action:
             print_yellow("\n[*] Found s3:ListAllMyBuckets permission - Listing all buckets:\n")
-            self._list_and_display_buckets()
+            buckets = self._list_and_display_buckets()
+            if buckets:
+                print_magenta("\n💡 Tip: Use 'awsome-enum --profile [profile] -e s3' to iteratively enumerate all buckets")
             
         elif resource != '*' and resource.startswith('arn:aws:s3:::'):
             bucket_name = resource.split(':::')[1].split('/')[0]
@@ -66,8 +69,12 @@ class S3Service(AWSServiceInterface):
             policy = self.client.get_bucket_policy(Bucket=bucket_name)
             print_yellow(f"\n[*] Bucket Policy for {bucket_name}:")
             print(yaml.dump(yaml.safe_load(policy['Policy']), default_flow_style=False))
-        except self.client.exceptions.NoSuchBucketPolicy:
-            print_yellow(f"No bucket policy found for {bucket_name}")
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'NoSuchBucketPolicy':
+                print_red(f"No bucket policy found for {bucket_name}")
+            else:
+                print_red(f"Error getting bucket policy: {str(e)}")
         except Exception as e:
             print_red(f"Error getting bucket policy: {str(e)}")
     

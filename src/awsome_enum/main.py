@@ -141,7 +141,7 @@ def execute_service_command(service, service_name, subcommand, arguments):
     
     try:
         if arguments:
-            method(arguments)
+            method(*arguments)
         else:
             method()
     except Exception as e:
