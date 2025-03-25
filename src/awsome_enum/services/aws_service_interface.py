@@ -20,20 +20,47 @@ class AWSServiceInterface(ABC):
     def check_interesting_permissions(self, action, resource, print_line):
         """
         Check if a permission action is interesting and print a message if it is.
+        Handles actions with wildcards (e.g., 'ssm:*' or 'ssm:Get*')
     
         Args:
-            action (str): The AWS IAM action to check (e.g., 'iam:PassRole')
+            action (str): The AWS IAM action to check (e.g., 'iam:PassRole', 'ssm:*')
             resource (str): The AWS resource ARN the action applies to
-    
-        Prints privilege escalation info if the action is interesting.
+            print_line (bool): Whether to print a separator line
         """
+        # Check exact matches first
         if action in self.interesting_permissions:
-            if print_line:
-                print("\n" + "-" * 100)
-            print()
-            print_green(f"[!] '{action}' is an Interesting Permission for possible privilege escalation.")
-            print_green(f"➡️  More info: {self.interesting_permissions[action]}")
-            print_green(f"🎯 Resource: {resource}")
+            self._print_interesting_permission(action, resource, print_line)
+            return
+    
+        # Handle wildcard actions
+        action_service, action_pattern = action.split(':') if ':' in action else ('', '')
+        if '*' in action_pattern:
+            # Find all matching interesting permissions
+            for interesting_action in self.interesting_permissions:
+                interesting_service, interesting_name = interesting_action.split(':')
+                
+                # Skip if services don't match
+                if action_service != interesting_service:
+                    continue
+                    
+                # Full service wildcard (e.g., ssm:*)
+                if action_pattern == '*':
+                    self._print_interesting_permission(interesting_action, resource, print_line)
+                    continue
+                    
+                # Partial wildcard (e.g., ssm:Get*)
+                wildcard_prefix = action_pattern.replace('*', '')
+                if interesting_name.startswith(wildcard_prefix):
+                    self._print_interesting_permission(interesting_action, resource, print_line)
+
+    def _print_interesting_permission(self, action, resource, print_line):
+        """Helper method to print interesting permission details."""
+        if print_line:
+            print("\n" + "-" * 100)
+        print()
+        print_green(f"[!] '{action}' is an Interesting Permission for possible privilege escalation.")
+        print_green(f"➡️  More info: {self.interesting_permissions[action]}")
+        print_green(f"🎯 Resource: {resource}")
 
     def parse_policy_document(self, policy_document):
         """

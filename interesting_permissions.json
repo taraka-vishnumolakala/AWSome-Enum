@@ -183,7 +183,24 @@
     "states:StartSyncExecution": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-step-functions-privesc.html#statescreatestatemachine--iampassrole--statesstartexecution--statesstartsyncexecution",
     "states:UpdateStateMachine": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-step-functions-privesc.html#statesupdatestatemachine--not-always-required-iampassrole",
     "scheduler:CreateSchedule": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-eventbridge-scheduler-privesc.html#iampassrole-schedulercreateschedule--schedulerupdateschedule",
-    "scheduler:UpdateSchedule": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-eventbridge-scheduler-privesc.html#iampassrole-schedulercreateschedule--schedulerupdateschedule" 
+    "scheduler:UpdateSchedule": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-eventbridge-scheduler-privesc.html#iampassrole-schedulercreateschedule--schedulerupdateschedule" ,    
+    "ssm:SendCommand": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmsendcommand",
+    "ssm:StartSession": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmstartsession",
+    "ssm:ResumeSession": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmresumesession",
+    "ssm:DescribeParameters": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmdescribeparameters-ssmgetparameter--ssmgetparameters",
+    "ssm:GetParameter": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmdescribeparameters-ssmgetparameter--ssmgetparameters",
+    "ssm:GetParameters": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmdescribeparameters-ssmgetparameter--ssmgetparameters",
+    "ssm:ListCommands": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmlistcommands",
+    "ssm:GetCommandInvocation": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmgetcommandinvocation-ssmlistcommandinvocations--ssmlistcommands",
+    "ssm:ListCommandInvocations": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ssm-privesc.html#ssmgetcommandinvocation-ssmlistcommandinvocations--ssmlistcommands",
+    "ebs:ListSnapshotBlocks": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ebs:GetSnapshotBlock": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ec2:DescribeSnapshots": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ec2:DescribeInstances": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ec2:DescribeVolumes": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ec2:DeleteSnapshot": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots",
+    "ec2:CreateSnapshot": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ec2createsnapshot",
+    "ec2:CreateTags": "https://cloud.hacktricks.wiki/en/pentesting-cloud/aws-security/aws-privilege-escalation/aws-ebs-privesc.html#ebslistsnapshotblocks-ebsgetsnapshotblock-ec2describesnapshots"
 }
 
 
