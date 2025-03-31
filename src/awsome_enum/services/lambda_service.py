@@ -12,6 +12,7 @@ class LambdaService(AWSServiceInterface):
             "lambda:ListFunctions",
             "lambda:GetFunction",
             "lambda:GetFunctionUrlConfig",
+            "lambda:GetFunctionConfiguration"
         ]
     
     def enumerate(self):
@@ -52,8 +53,10 @@ class LambdaService(AWSServiceInterface):
             self._handle_list_functions(action)
         elif "lambda:GetFunction" == action or "lambda:*" in action:
             self._handle_get_function(action, resource)            
-        if "lambda:GetFunctionUrlConfig" == action or "lambda:*" in action:
+        elif "lambda:GetFunctionUrlConfig" == action or "lambda:*" in action:
             self._handle_get_function_url(action, resource)
+        elif "lambda:GetFunctionConfiguration" == action or "lambda:*" in action:
+            self._handle_get_function_configuration(action, resource)
 
     def _handle_list_functions(self, action):
         print_yellow(f"\n[*] Found {action} permission - Listing all functions")
@@ -164,6 +167,50 @@ class LambdaService(AWSServiceInterface):
             if self.debug:
                 print_red(f"Error getting URL config for {function_name}: {str(e)}")
 
+    def _handle_get_function_configuration(self, action, resource):
+        print_yellow(f"\n[*] Found {action} permission - Checking function configuration")
+        
+        try:
+            if resource == '*':
+                functions = self.list_functions()
+                for function in functions:
+                    self._display_function_configuration(function['FunctionName'])
+            else:
+                function_name = resource.split(':')[-1] if ':' in resource else resource
+                self._display_function_configuration(function_name)
+        except Exception as e:
+            if self.debug:
+                print_red(f"Error in function configuration handler: {str(e)}")
+
+    def _display_function_configuration(self, function_name):
+        try:
+            config = self.get_function_configuration(function_name)
+            if config:
+                print_yellow(f"\nConfiguration for {function_name}:")
+                config_data = [
+                    ['Runtime', config.get('Runtime')],
+                    ['Handler', config.get('Handler')],
+                    ['Role', config.get('Role')],
+                    ['Environment', str(config.get('Environment', {}).get('Variables', {}))],
+                    ['Layers', ', '.join(layer['Arn'] for layer in config.get('Layers', []))],
+                    ['VPC Config', str(config.get('VpcConfig', {}))],
+                    ['Package Type', config.get('PackageType')],
+                    ['Ephemeral Storage', f"{config.get('EphemeralStorage', {}).get('Size', 0)} MB"],
+                    ['Code Signing', str(config.get('CodeSigningConfig', {}))]
+                ]
+                print(tabulate(config_data, tablefmt='simple'))
+
+                # Security warnings
+                if config.get('Environment', {}).get('Variables'):
+                    print_yellow("\n[!] Function has environment variables configured")
+                if config.get('VpcConfig', {}).get('SubnetIds'):
+                    print_yellow("\n[!] Function is VPC-enabled")
+                if not config.get('CodeSigningConfig'):
+                    print_red("\n[!] Warning: No code signing configuration found")
+        except Exception as e:
+            if self.debug:
+                print_red(f"Error getting configuration for {function_name}: {str(e)}")
+
     # Wrapper methods for Lambda API calls
     def list_functions(self):
         response = self.client.list_functions()
@@ -179,3 +226,11 @@ class LambdaService(AWSServiceInterface):
             if e.response['Error']['Code'] == 'ResourceNotFoundException':
                 return None
             raise
+
+    def get_function_configuration(self, function_name):
+        try:
+            return self.client.get_function_configuration(FunctionName=function_name)
+        except ClientError as e:
+            if self.debug:
+                print_red(f"Error getting function configuration: {str(e)}")
+            return None

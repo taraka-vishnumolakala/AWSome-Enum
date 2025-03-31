@@ -13,7 +13,7 @@ class IAMService(AWSServiceInterface):
         self.available_services = None
         self.all_resource_actions = {}
         self.supported_actions = [
-            "iam:ListRoles", "iam:ListUsers", "iam:GetPolicyVersion", "iam:*"
+            "iam:ListRoles", "iam:ListUsers", "iam:GetPolicyVersion", "iam:ListAttachedRolePolicies", "iam:*"
         ]
 
     def enumerate(self):
@@ -56,6 +56,34 @@ class IAMService(AWSServiceInterface):
                     print(yaml.dump(policy_document))
                 except Exception as e:
                     print_red(f"Error listing policies: {str(e)}")
+        
+        elif action in ("iam:ListAttachedRolePolicies", "iam:*"):
+            try:
+                role_name = resource.split('/')[-1]
+                print_yellow(f"\n[*] Found iam:ListAttachedRolePolicies permission for role: {role_name}")
+                policies = self.list_attached_role_policies(role_name)
+                
+                if policies:
+                    policy_data = [[p['PolicyName'], p['PolicyArn']] for p in policies]
+                    print(tabulate(policy_data, headers=['Policy Name', 'Policy ARN'], tablefmt='simple'))
+                    
+                    # Process each policy
+                    for policy in policies:
+                        try:
+                            attached_policy = self.get_policy(policy_arn=policy['PolicyArn'])
+                            policy_version = self.get_policy_version(
+                                policy['PolicyArn'], 
+                                attached_policy['DefaultVersionId']
+                            )
+                            print_yellow(f"\nPolicy Document for: {policy['PolicyName']}")
+                            print(yaml.dump(policy_version['Document']))
+                        except Exception as e:
+                            if self.debug:
+                                print_red(f"Error getting policy {policy['PolicyName']}: {str(e)}")
+                else:
+                    print_yellow(f"No attached policies found for role: {role_name}")
+            except Exception as e:
+                print_red(f"Error handling ListAttachedRolePolicies: {str(e)}")
     
     def set_available_services(self, services_dict):
         self.available_services = services_dict
