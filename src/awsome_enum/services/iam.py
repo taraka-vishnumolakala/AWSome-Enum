@@ -326,6 +326,18 @@ class IAMService(AWSServiceInterface):
                     print_cyan("\n[*] Attached Role Policies:")
                     if attached_policies:
                         print(yaml.dump(attached_policies))
+                        print_cyan("\n[*] Attached Policy Details:")
+                        for policy in attached_policies:
+                            try:
+                                policy_details = self.get_policy(policy['PolicyArn'])
+                                policy_version = self.get_policy_version(
+                                    policy['PolicyArn'],
+                                    policy_details['DefaultVersionId']
+                                )
+                                print_yellow(f"\nPolicy Name: {policy['PolicyName']}")
+                                print(yaml.dump(policy_version['Document']))
+                            except Exception as e:
+                                print_red(f"Error getting policy details for {policy['PolicyName']}: {str(e)}")
                     else:
                         print_yellow("No attached policies found")
                 except Exception as e:
