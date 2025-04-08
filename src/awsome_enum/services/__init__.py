@@ -10,6 +10,11 @@ from .rds import RDSService
 from .ecr import ECRService
 from .ecs import ECSService
 from .elasticbeanstalk import ElasticBeanstalkService
+from .codebuild import CodeBuildService
+from .sqs import SQSService
+from .sns import SNSService
+from .stepfunctions import StepFunctionsService
+from .eventbridgescheduler import EventBridgeSchedulerService
 # Import other services as they are implemented
 
 # This dictionary will be used to load and instantiate service classes
@@ -26,5 +31,10 @@ AVAILABLE_SERVICES = {
     'ecr': ECRService,
     'ecs': ECSService,
     'elasticbeanstalk': ElasticBeanstalkService,
+    'codebuild': CodeBuildService,
+    'sqs': SQSService,
+    'sns': SNSService,
+    'states': StepFunctionsService,
+    'scheduler': EventBridgeSchedulerService,
     # Add other services here as they are implemented
 }
